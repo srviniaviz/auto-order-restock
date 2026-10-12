@@ -4,7 +4,7 @@ Mod local para Supermarket Simulator com BepInEx 6 IL2CPP.
 
 Quando um produto tem uma prateleira de venda incompleta e não há reserva, ou quando há mais posições etiquetadas incompletas no estoque do que caixas soltas disponíveis para preenchê-las, o mod compra automaticamente **1 caixa** desse produto pelo carrinho normal do jogo. Ele só faz pedidos com o carrinho vazio, antes do horário limite do mercado e com saldo suficiente. Reúne no mesmo pedido 1 caixa de cada produto elegível; se atingir o limite do carrinho, inclui os demais nas próximas verificações. As caixas chegam pelo fluxo normal do jogo; os repositores continuam responsáveis por colocá-las nas prateleiras.
 
-O mod roda apenas no modo de um jogador. Pedidos pendentes são lembrados até a caixa chegar ou por dois minutos; depois o produto pode ser comprado novamente quando acabar.
+O mod roda apenas no modo de um jogador. Pedidos pendentes são lembrados até a entrega ser detectada ou por dois minutos; depois pode comprar outra caixa se ainda houver posições incompletas sem caixas soltas suficientes.
 
 ## Instalação
 

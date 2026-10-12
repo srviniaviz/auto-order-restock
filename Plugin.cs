@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace AutoOrderRestock;
 
-[BepInPlugin("vinicius.autoorderrestock", "Auto Order Restock", "0.5.1")]
+[BepInPlugin("vinicius.autoorderrestock", "Auto Order Restock", "0.5.2")]
 public sealed class Plugin : BasePlugin
 {
     internal static ManualLogSource LogSource;
@@ -47,6 +47,8 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
     private readonly HashSet<int> _pending = new();
     private readonly HashSet<int> _logged = new();
     private readonly Dictionary<int, float> _retryAfter = new();
+    private readonly Dictionary<int, int> _boxesAtOrder = new();
+    private readonly Dictionary<int, int> _inventoryAtOrder = new();
     private float _nextScan;
     private float _noticeUntil;
     private string _notice = "";
@@ -112,11 +114,15 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
         var eligible = new List<ProductSO>();
         var productsInBoxes = new HashSet<int>();
         var looseBoxes = new Dictionary<int, int>();
+        var physicalBoxes = new Dictionary<int, int>();
+        var observedInventory = new Dictionary<int, int>();
         foreach (var box in UnityEngine.Object.FindObjectsOfType<Box>())
         {
             if (box != null && box.Data != null && box.ProductCount > 0 && box.Data.ProductID > 0)
             {
                 productsInBoxes.Add(box.Data.ProductID);
+                physicalBoxes.TryGetValue(box.Data.ProductID, out var totalBoxes);
+                physicalBoxes[box.Data.ProductID] = totalBoxes + 1;
                 if (!box.Racked)
                 {
                     looseBoxes.TryGetValue(box.Data.ProductID, out var count);
@@ -166,24 +172,32 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
                 var rackNeedsStock = rackSlotsNeedingBoxes > looseBoxCount;
                 if (!shelfNeedsStock && !rackNeedsStock)
                 {
-                    _pending.Remove(id);
+                    ClearPending(id);
                     continue;
                 }
                 var shown = displays.GetDisplayedProductCount(id);
                 var total = inventory.GetInventoryAmount(id);
+                observedInventory[id] = total;
                 var reserve = Math.Max(0, total - shown);
                 if (!rackNeedsStock && (reserve > 0 || productsInBoxes.Contains(id)))
                 {
-                    _pending.Remove(id);
+                    ClearPending(id);
                     continue;
                 }
                 if (_logged.Add(id))
                     Plugin.LogSource.LogInfo($"Shortage id={id}: displaySlots={slots?.Count ?? 0}, displayNeedsStock={shelfNeedsStock}, incompleteRackSlots={rackSlotsNeedingBoxes}, looseBoxes={looseBoxCount}, rackNeedsStock={rackNeedsStock}, displayed={shown}, inventory={total}, reserve={reserve}, pending={_pending.Contains(id)}");
+                physicalBoxes.TryGetValue(id, out var currentBoxes);
+                if (_pending.Contains(id) &&
+                    ((_boxesAtOrder.TryGetValue(id, out var boxesBefore) && currentBoxes > boxesBefore) ||
+                     (_inventoryAtOrder.TryGetValue(id, out var inventoryBefore) && total > inventoryBefore)))
+                {
+                    ClearPending(id);
+                    Plugin.LogSource.LogInfo($"Delivery detected for product {id}; remaining rack slots can be ordered again.");
+                }
                 if (_retryAfter.TryGetValue(id, out var retry))
                 {
                     if (Time.unscaledTime < retry) continue;
-                    _retryAfter.Remove(id);
-                    _pending.Remove(id);
+                    ClearPending(id);
                 }
                 if (_pending.Contains(id)) continue;
                 var product = idManager.ProductSO(id);
@@ -202,7 +216,7 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
             Plugin.LogSource.LogInfo($"DRY RUN: would order {Math.Clamp(Plugin.BoxesPerProduct.Value, 1, 10)} boxes each for {eligible.Count} products.");
             return;
         }
-        TryOrderBatch(cart, eligible);
+        TryOrderBatch(cart, eligible, physicalBoxes, observedInventory);
     }
 
     private static bool HasAnythingInCart(MarketShoppingCart cart)
@@ -215,7 +229,7 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
                (data.FloorBoxesInCarts != null && data.FloorBoxesInCarts.Count > 0);
     }
 
-    private void TryOrderBatch(MarketShoppingCart cart, List<ProductSO> products)
+    private void TryOrderBatch(MarketShoppingCart cart, List<ProductSO> products, Dictionary<int, int> physicalBoxes, Dictionary<int, int> observedInventory)
     {
         var count = Math.Clamp(Plugin.BoxesPerProduct.Value, 1, 10);
         var added = new List<int>();
@@ -260,6 +274,8 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
         {
             _pending.Add(id);
             _retryAfter[id] = Time.unscaledTime + 120f;
+            _boxesAtOrder[id] = physicalBoxes.TryGetValue(id, out var boxes) ? boxes : 0;
+            _inventoryAtOrder[id] = observedInventory.TryGetValue(id, out var stock) ? stock : 0;
         }
         _ordersThisSession++;
         Plugin.LogSource.LogInfo($"Submitted {count} boxes each for {added.Count} products ({expectedBoxes} boxes total) through the game's market cart: {string.Join(",", added)}.");
@@ -270,6 +286,14 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
     {
         _notice = text;
         _noticeUntil = Time.unscaledTime + 5f;
+    }
+
+    private void ClearPending(int id)
+    {
+        _pending.Remove(id);
+        _retryAfter.Remove(id);
+        _boxesAtOrder.Remove(id);
+        _inventoryAtOrder.Remove(id);
     }
 
     private void OnGUI()
