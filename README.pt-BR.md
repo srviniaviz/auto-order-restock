@@ -15,9 +15,11 @@ O mod roda apenas no modo de um jogador. Pedidos pendentes são lembrados até a
 ## Controles e configuração
 
 - **Ctrl+Alt+R:** pausa ou reativa os pedidos automáticos.
+- **Ctrl+Alt+S:** pausa ou reativa pedidos acionados pelas prateleiras de venda.
+- **Ctrl+Alt+E:** pausa ou reativa pedidos acionados pelas estantes do estoque.
 - **Ctrl+Alt+L:** recarrega as configurações do arquivo `.cfg` sem reiniciar o jogo.
 
-O arquivo `BepInEx/config/vinicius.autoorderrestock.cfg` é criado na primeira execução. As opções principais são `Enabled`, `BoxesPerProduct` (padrão 1), `CheckIntervalSeconds` (padrão 10), `DryRun` (apenas registra o que compraria) e `MaxOrdersPerSession` (0 = sem limite).
+O arquivo `BepInEx/config/vinicius.autoorderrestock.cfg` é criado na primeira execução. As opções principais são `Enabled`, `SalesShelvesEnabled` e `StorageRacksEnabled` (ambos ligados por padrão), `BoxesPerProduct` (padrão 1), `CheckIntervalSeconds` (padrão 10), `DryRun` (apenas registra o que compraria) e `MaxOrdersPerSession` (0 = sem limite).
 
 O aviso no canto superior direito mostra quando um pedido foi enviado. Para investigar falhas, consulte `BepInEx/LogOutput.log` e procure `Auto Order Restock`.
 

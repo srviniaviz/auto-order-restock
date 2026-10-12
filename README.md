@@ -13,9 +13,11 @@ The mod also checks physical boxes in the scene, including delivered boxes on th
 ## Controls and settings
 
 - **Ctrl+Alt+R:** enable or pause automatic orders. A short notice appears on screen.
+- **Ctrl+Alt+S:** enable or pause orders triggered by sales shelves.
+- **Ctrl+Alt+E:** enable or pause orders triggered by storage racks.
 - **Ctrl+Alt+L:** reload the config while the game is running.
 
-The config file is created at `BepInEx/config/vinicius.autoorderrestock.cfg`. Defaults: `Enabled=true`, `BoxesPerProduct=1`, `CheckIntervalSeconds=10`, `DryRun=false`, `MaxOrdersPerSession=0` (no session limit). `BoxesPerProduct` accepts 1-10. Orders require an empty market cart, enough money for the whole order, an active product license, and an open ordering window. If funds are insufficient, the mod clears the cart it filled and leaves the player's cart alone.
+The config file is created at `BepInEx/config/vinicius.autoorderrestock.cfg`. Defaults: `Enabled=true`, `SalesShelvesEnabled=true`, `StorageRacksEnabled=true`, `BoxesPerProduct=1`, `CheckIntervalSeconds=10`, `DryRun=false`, `MaxOrdersPerSession=0` (no session limit). `BoxesPerProduct` accepts 1-10. Orders require an empty market cart, enough money for the whole order, an active product license, and an open ordering window. If funds are insufficient, the mod clears the cart it filled and leaves the player's cart alone.
 
 The mod runs only in single-player. It does not edit save files. It was tested locally on Supermarket Simulator v1.7.1. Other mods that alter the cart or inventory can interfere.
 

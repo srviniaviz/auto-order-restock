@@ -10,11 +10,13 @@ using UnityEngine;
 
 namespace AutoOrderRestock;
 
-[BepInPlugin("vinicius.autoorderrestock", "Auto Order Restock", "0.4.0")]
+[BepInPlugin("vinicius.autoorderrestock", "Auto Order Restock", "0.5.0")]
 public sealed class Plugin : BasePlugin
 {
     internal static ManualLogSource LogSource;
     internal static ConfigEntry<bool> Enabled;
+    internal static ConfigEntry<bool> SalesShelvesEnabled;
+    internal static ConfigEntry<bool> StorageRacksEnabled;
     internal static ConfigEntry<bool> DryRun;
     internal static ConfigEntry<int> BoxesPerProduct;
     internal static ConfigEntry<float> CheckIntervalSeconds;
@@ -26,6 +28,8 @@ public sealed class Plugin : BasePlugin
         LogSource = Log;
         Settings = Config;
         Enabled = Config.Bind("General", "Enabled", true, "Automatically order products when a display or labeled storage rack slot is incomplete and no reserve stock remains.");
+        SalesShelvesEnabled = Config.Bind("General", "SalesShelvesEnabled", true, "Include incomplete sales shelves when deciding what to order.");
+        StorageRacksEnabled = Config.Bind("General", "StorageRacksEnabled", true, "Include incomplete labeled storage rack slots when deciding what to order.");
         DryRun = Config.Bind("General", "DryRun", false, "Log planned orders without spending money.");
         BoxesPerProduct = Config.Bind("General", "BoxesPerProduct", 1, "Boxes to order per product, from 1 to 10.");
         CheckIntervalSeconds = Config.Bind("General", "CheckIntervalSeconds", 10f, "Seconds between checks, minimum 5.");
@@ -64,16 +68,28 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
                     Notify(Plugin.Enabled.Value ? "Pedidos automáticos: ligados" : "Pedidos automáticos: pausados");
                     Plugin.LogSource.LogInfo($"Enabled={Plugin.Enabled.Value}");
                 }
+                if (Input.GetKeyDown(KeyCode.S))
+                {
+                    Plugin.SalesShelvesEnabled.Value = !Plugin.SalesShelvesEnabled.Value;
+                    Notify(Plugin.SalesShelvesEnabled.Value ? "Prateleiras de venda: ligadas" : "Prateleiras de venda: pausadas");
+                    Plugin.LogSource.LogInfo($"SalesShelvesEnabled={Plugin.SalesShelvesEnabled.Value}");
+                }
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    Plugin.StorageRacksEnabled.Value = !Plugin.StorageRacksEnabled.Value;
+                    Notify(Plugin.StorageRacksEnabled.Value ? "Estantes do estoque: ligadas" : "Estantes do estoque: pausadas");
+                    Plugin.LogSource.LogInfo($"StorageRacksEnabled={Plugin.StorageRacksEnabled.Value}");
+                }
                 if (Input.GetKeyDown(KeyCode.L))
                 {
                     Plugin.Settings.Reload();
                     Notify($"Config recarregada: {Plugin.BoxesPerProduct.Value} caixas");
-                    Plugin.LogSource.LogInfo($"Config reloaded: DryRun={Plugin.DryRun.Value}, MaxOrdersPerSession={Plugin.MaxOrdersPerSession.Value}.");
+                    Plugin.LogSource.LogInfo($"Config reloaded: DryRun={Plugin.DryRun.Value}, MaxOrdersPerSession={Plugin.MaxOrdersPerSession.Value}, SalesShelvesEnabled={Plugin.SalesShelvesEnabled.Value}, StorageRacksEnabled={Plugin.StorageRacksEnabled.Value}.");
                 }
             }
         }
 
-        if (!Plugin.Enabled.Value || Time.unscaledTime < _nextScan) return;
+        if (!Plugin.Enabled.Value || (!Plugin.SalesShelvesEnabled.Value && !Plugin.StorageRacksEnabled.Value) || Time.unscaledTime < _nextScan) return;
         _nextScan = Time.unscaledTime + Math.Max(5f, Plugin.CheckIntervalSeconds.Value);
         try { Scan(); }
         catch (Exception ex) { Plugin.LogSource.LogError($"Restock scan failed: {ex}"); }
@@ -102,7 +118,7 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
         }
         var rackNeedsStock = new HashSet<int>();
         var rackSlotCount = 0;
-        foreach (var slot in UnityEngine.Object.FindObjectsOfType<RackSlot>())
+        if (Plugin.StorageRacksEnabled.Value) foreach (var slot in UnityEngine.Object.FindObjectsOfType<RackSlot>())
         {
             rackSlotCount++;
             if (slot != null && slot.Data != null && slot.Data.ProductID > 0 && !slot.Full)
@@ -116,7 +132,7 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
         }
 
         var ids = new HashSet<int>(rackNeedsStock);
-        foreach (var id in displays.DisplayedProducts.Keys) ids.Add(id);
+        if (Plugin.SalesShelvesEnabled.Value) foreach (var id in displays.DisplayedProducts.Keys) ids.Add(id);
         foreach (var id in ids)
         {
             if (id <= 0) continue;
@@ -124,7 +140,7 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
             {
                 displays.DisplayedProducts.TryGetValue(id, out var slots);
                 var shelfNeedsStock = false;
-                if (slots != null) foreach (var slot in slots)
+                if (Plugin.SalesShelvesEnabled.Value && slots != null) foreach (var slot in slots)
                 {
                     if (slot != null &&
                         (slot.HasProduct ? slot.ProductID : slot.Data != null && slot.Data.HasLabel ? slot.Data.FirstItemID : -1) == id &&
