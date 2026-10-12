@@ -1,8 +1,8 @@
 # Auto Order Restock
 
-Automatically order stock for Supermarket Simulator when a product has an incomplete sales shelf or a labeled storage rack slot with space, and no reserve stock. The default is **one box per eligible product**, checked every **10 seconds**. Eligible products are grouped into a market cart order; if the cart reaches its limit, the rest can be ordered on later checks.
+Automatically order stock for Supermarket Simulator when a product has an incomplete sales shelf with no reserve stock, or when incomplete labeled storage rack slots outnumber loose boxes available to fill them. The default is **one box per eligible product**, checked every **10 seconds**. Eligible products are grouped into a market cart order; if the cart reaches its limit, the rest can be ordered on later checks.
 
-The mod also checks physical boxes in the scene, including delivered boxes on the street, before ordering again. A pending order is released after stock arrives or a two-minute retry window expires, so products can be ordered again after their last box is consumed. It uses the game's normal purchasing and delivery flow. Restockers or the player still move products to shelves.
+The mod also checks physical boxes in the scene, including delivered boxes on the street, before ordering again. One existing box does not block orders for several incomplete rack slots of the same product. A pending order is released after stock arrives or a two-minute retry window expires, so products can be ordered again after their last box is consumed. It uses the game's normal purchasing and delivery flow. Restockers or the player still move products to shelves.
 
 ## Install
 

@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace AutoOrderRestock;
 
-[BepInPlugin("vinicius.autoorderrestock", "Auto Order Restock", "0.5.0")]
+[BepInPlugin("vinicius.autoorderrestock", "Auto Order Restock", "0.5.1")]
 public sealed class Plugin : BasePlugin
 {
     internal static ManualLogSource LogSource;
@@ -111,27 +111,38 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
 
         var eligible = new List<ProductSO>();
         var productsInBoxes = new HashSet<int>();
+        var looseBoxes = new Dictionary<int, int>();
         foreach (var box in UnityEngine.Object.FindObjectsOfType<Box>())
         {
             if (box != null && box.Data != null && box.ProductCount > 0 && box.Data.ProductID > 0)
+            {
                 productsInBoxes.Add(box.Data.ProductID);
+                if (!box.Racked)
+                {
+                    looseBoxes.TryGetValue(box.Data.ProductID, out var count);
+                    looseBoxes[box.Data.ProductID] = count + 1;
+                }
+            }
         }
-        var rackNeedsStock = new HashSet<int>();
+        var incompleteRackSlots = new Dictionary<int, int>();
         var rackSlotCount = 0;
         if (Plugin.StorageRacksEnabled.Value) foreach (var slot in UnityEngine.Object.FindObjectsOfType<RackSlot>())
         {
             rackSlotCount++;
             if (slot != null && slot.Data != null && slot.Data.ProductID > 0 && !slot.Full)
-                rackNeedsStock.Add(slot.Data.ProductID);
+            {
+                incompleteRackSlots.TryGetValue(slot.Data.ProductID, out var count);
+                incompleteRackSlots[slot.Data.ProductID] = count + 1;
+            }
         }
-        if (rackSlotCount != _lastRackSlotCount || rackNeedsStock.Count != _lastRackNeedCount)
+        if (rackSlotCount != _lastRackSlotCount || incompleteRackSlots.Count != _lastRackNeedCount)
         {
-            Plugin.LogSource.LogInfo($"Rack scan: {rackSlotCount} slots, {rackNeedsStock.Count} products with incomplete labeled rack slots.");
+            Plugin.LogSource.LogInfo($"Rack scan: {rackSlotCount} slots, {incompleteRackSlots.Count} products with incomplete labeled rack slots.");
             _lastRackSlotCount = rackSlotCount;
-            _lastRackNeedCount = rackNeedsStock.Count;
+            _lastRackNeedCount = incompleteRackSlots.Count;
         }
 
-        var ids = new HashSet<int>(rackNeedsStock);
+        var ids = new HashSet<int>(incompleteRackSlots.Keys);
         if (Plugin.SalesShelvesEnabled.Value) foreach (var id in displays.DisplayedProducts.Keys) ids.Add(id);
         foreach (var id in ids)
         {
@@ -150,7 +161,10 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
                         break;
                     }
                 }
-                if (!shelfNeedsStock && !rackNeedsStock.Contains(id))
+                incompleteRackSlots.TryGetValue(id, out var rackSlotsNeedingBoxes);
+                looseBoxes.TryGetValue(id, out var looseBoxCount);
+                var rackNeedsStock = rackSlotsNeedingBoxes > looseBoxCount;
+                if (!shelfNeedsStock && !rackNeedsStock)
                 {
                     _pending.Remove(id);
                     continue;
@@ -158,18 +172,13 @@ public sealed class AutoOrderBehaviour : MonoBehaviour
                 var shown = displays.GetDisplayedProductCount(id);
                 var total = inventory.GetInventoryAmount(id);
                 var reserve = Math.Max(0, total - shown);
-                if (reserve > 0)
-                {
-                    _pending.Remove(id);
-                    continue;
-                }
-                if (productsInBoxes.Contains(id))
+                if (!rackNeedsStock && (reserve > 0 || productsInBoxes.Contains(id)))
                 {
                     _pending.Remove(id);
                     continue;
                 }
                 if (_logged.Add(id))
-                    Plugin.LogSource.LogInfo($"Shortage id={id}: displaySlots={slots?.Count ?? 0}, displayNeedsStock={shelfNeedsStock}, rackNeedsStock={rackNeedsStock.Contains(id)}, displayed={shown}, inventory={total}, reserve={reserve}, pending={_pending.Contains(id)}");
+                    Plugin.LogSource.LogInfo($"Shortage id={id}: displaySlots={slots?.Count ?? 0}, displayNeedsStock={shelfNeedsStock}, incompleteRackSlots={rackSlotsNeedingBoxes}, looseBoxes={looseBoxCount}, rackNeedsStock={rackNeedsStock}, displayed={shown}, inventory={total}, reserve={reserve}, pending={_pending.Contains(id)}");
                 if (_retryAfter.TryGetValue(id, out var retry))
                 {
                     if (Time.unscaledTime < retry) continue;
